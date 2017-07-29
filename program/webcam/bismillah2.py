@@ -1,0 +1,464 @@
+#This program for image image processing **learning : by python programming**
+#
+#
+#
+#this Program write by: Muhammad fadlullah
+#you can send me massage at my gmail : Muhammadfadlullah9@gmail.com
+#-----------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------
+#------------**************-----****************------------------********--------------*******----********-------
+#-----------**************-----********************--------------********-------------********----********--------
+#--------------------------__********-------********-----------********-------------********----********----------
+#------------********-----__********----------******----------********-------------********----********-----------
+#-----------********-------********---------********---------****************-----********----********------------
+#----------********-------********------********------------*******************-----****************--------------
+#---------********-------********----********--------------*********----*******------**************---------------
+#--------********-------********------********-------------*********----*******-------- --********----------------
+#-------********-------********--------********------------*********----*******----------********-----------------
+#----************-----********----------********------------******************----------********------------------
+#---************-----********------------********-------------**************-----------********-------------------
+#-----------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------
+#-----------------------------------------------------------------------------------------------------------------
+
+import RPi.GPIO as GPIO
+import numpy as np
+import cv2
+#import serial
+import struct
+import sys
+import socket
+from threading import Thread
+from time import sleep
+#compas
+from math import atan2
+import smbus
+import time
+bus=smbus.SMBus(1)
+bus.write_byte_data(0x1e,0x00, 0x14)
+bus.write_byte_data(0x1e, 0x02, 0x00)
+address = 0x60
+#GPIO setmode
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+
+#socket networking
+robot = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+robot.connect(('192.168.0.10', 1991))
+#variabel data jaringan
+data='0'
+refbox='0'
+Vcontrol=0
+
+#other
+goal=0
+data_compas={0,0,0,0,0}
+#pin mode GPIO RASPBERRY PI
+GPIO.setup(13,GPIO.IN)
+Pins=[12,10,9,4,13,5,6,13,14,15,16,17,18,27,22,23,24,25,10,9,11,20,21,19,26]
+for i in Pins:
+	GPIO.setup(i,GPIO.OUT)
+pwm = GPIO.PWM(17,255)
+pwm1 = GPIO.PWM(18,255)
+pwm2 = GPIO.PWM(25,255)
+pwm.start(0)
+pwm1.start(0)
+pwm2.start(0)
+cap = cv2.VideoCapture(0)
+cap.set(3,320)
+cap.set(4,240)
+cap.set(15,0.1)
+#arduino=serial.Serial('/dev/ttyACM0',9600)
+#for navigation and Pid Control
+x=0
+y=0
+radius=0
+Pid=0
+error=0
+last_error=0
+Kp=0.3
+Kd=0.9
+Ki=0.01
+Ts=1
+fast_ka=float(50)
+fast_ki=float(50)
+fast_be=0
+max_speed=80 
+min_speed=0
+pwm_be=0
+set_point=160
+#kalibrasi sensor compas
+compas=0
+control=0
+#point=[168,175,183,190,198]
+#point=[180,171,168,154,148]#untuk gawang kiri juri
+point=[65,58,39,30,24]#untuk gawang kanan juri
+index=180
+data_sensor=0
+set_compas=118
+cmps=None	
+#networking
+recaive=0
+kondisi=0	
+cek =0
+position=np.array([0,0])
+def motor_ka(cw,ccw,pwm_ka):
+	GPIO.output(15,cw)
+	GPIO.output(14,ccw)
+	pwm.ChangeDutyCycle(pwm_ka)
+def motor_be(cw,ccw,pwm_be):
+	GPIO.output(10,cw)
+	GPIO.output(9,ccw)
+	pwm1.ChangeDutyCycle(pwm_be)
+def motor_ki(cw,ccw,pwm_ki):
+	GPIO.output(23,cw)
+	GPIO.output(24,ccw)
+	pwm2.ChangeDutyCycle(pwm_ki)
+
+def giring_1(cw,ccw):
+        GPIO.output(16,cw)
+        GPIO.output(12,ccw)
+def giring_2(cw,ccw):
+	GPIO.output(21,cw)
+	GPIO.output(20,ccw)	
+def mundur():
+	motor_ka(0,1,40)
+	motor_ki(0,1,40)
+	motor_be(0,0,0)
+def arah():
+	motor_ka(0,0,0)
+	motor_ki(0,0,0)
+	motor_be(1,0,50)
+def go_gawang():
+	motor_ka(1,0,70)
+	motor_ki(1,0,70)
+	motor_be(0,0,0)
+def maju():
+	motor_ka(1,0,30)
+	motor_ki(1,0,30)
+	motor_be(0,0,0)
+def stop():
+	motor_ka(0,0,0)
+	motor_ki(0,0,0)
+	motor_be(0,0,0)
+	GPIO.output(19,0)
+	GPIO.output(26,0)
+def putar_kanan ():
+	motor_ka(0,1,20)
+	motor_ki(1,0,20)
+	motor_be(1,0,20)
+def putar_kiri ():
+        motor_ka(1,0,15)
+        motor_ki(0,1,15)
+        motor_be(0,1,15)
+def scan_kiri():
+	motor_ka(0,0,0)
+	motor_ki(0,0,0)
+	motor_be(1,0,50)
+def scan_kanan():
+	motor_ka(0,0,0)
+	motor_ki(0,0,0)
+	motor_be(0,1,50)
+def slid_kanan():
+	motor_ka(0,1,35)
+	motor_be(0,1,50)
+	motor_ki(1,0,30)
+def slid_kiri():
+	motor_ka(1,0,20)
+	motor_be(1,0,30)
+	motor_ki(0,1,25)
+
+def scanning():
+	motor_ka(1,0,18)
+	motor_ki(0,1,18)
+	motor_be(0,1,18)
+
+def put_kir():
+	motor_ka(0,0,0)
+        motor_ki(0,0,0)
+        motor_be(1,0,50)
+
+def giring_ON():
+	giring_1(1,0)
+	giring_2(1,0)
+def giring_OFF():
+	giring_1(0,0)
+	giring_2(0,0)
+		
+#compas sensor
+def compas():
+        data = bus.read_i2c_block_data(0x1E, 0x03, 6)   
+ 
+        # Convert the data
+        xMag = data[0] * 256 + data[1]
+        if xMag > 32767 :
+                xMag -= 65536
+ 
+        zMag = data[2] * 256 + data[3]
+        if zMag > 32767 :
+                zMag -= 65536
+ 
+        yMag = data[4] * 256 + data[5]
+        if yMag > 32767 :
+                yMag -= 65536
+ 
+        heading = atan2(yMag, xMag)
+        decAngle = (4.0 + (26.0 / 60.0)) / (180 / 3.14)
+        heading += decAngle
+
+        if heading < 0:
+
+                heading += (2 * 3.14)
+        if heading > 2 * 3.14:
+                heading -= (2 * 3.140)
+
+        degree = heading * 180 / 3.14 
+        return int(degree)
+
+def pid(pv,sp):
+	global error
+	global last_error
+	error=pv-sp
+ 	hasil_PID=float(((Kp*error) +((Ki/10)*(error+last_error)*Ts)+((Kd/Ts)*(error-last_error))))
+	last_error=error
+	return hasil_PID
+
+#function for image_processing
+def _tracking_():
+	global x
+	global y
+	global radius	
+	_,video = cap.read()
+	video = cv2.flip(video,0)
+	data = np.array([0,0,0])
+	hsv = cv2.cvtColor(video,cv2.COLOR_BGR2HSV)
+	low_orange = np.array([0,90,98])
+	up_orange = np.array([56,255,255])
+	orange=[0,140,255]
+	kernel = np.ones((2,2),np.uint8)
+	mask=cv2.inRange(hsv,low_orange,up_orange)
+	opening= cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+	mask=cv2.dilate(mask,kernel,iterations=5)
+	cnts= cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
+	if len(cnts)>0:
+		c = max(cnts, key=cv2.contourArea)
+		((x,y),radius) = cv2.minEnclosingCircle(c)
+			#cv2.circle(video, (int (x),int (y)), int (radius),orange,4)
+		data=np.array([int(x),int(y),int(radius)])
+	else:
+		data = np.array([0,0,0])
+	#cv2.imshow('video',video)
+	print '(%d,%d)and %d'%(x,y,radius),
+	return data
+def image_gawang():
+	posisi_x=0
+	posisi_y=0
+	goal=np.array([0,0])
+	Bool,video=cap.read()
+	video=cv2.flip(video,0)
+	hsv = cv2.cvtColor(video, cv2.COLOR_BGR2HSV)
+	lower=(0,0,196)
+	upper=(178,30,234)
+	kernel = np.ones((2,2),np.uint8)
+	colors=(0,140,255)
+	mask = cv2.inRange(hsv, lower, upper)
+        #print hsv
+	mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+	mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+	mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+	mask=cv2.morphologyEx(mask, cv2.MORPH_CLOSE,kernel)
+	mask= cv2.dilate(mask,kernel,iterations = 2)
+        #laplacian=cv.Laplacian(video,cv.CV_64F)
+        #cv2.imshow('mask',mask)
+	cnts= cv2.findContours(mask.copy(), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)[-2]
+        #for i in range(0,5):
+                #for j in range(0,5):
+                        #cv.rectangle(video,(reg_x[i],reg_y[j]),(reg_x[i]+30,reg_y[j]+30),(255,0,0),2)
+	center =None
+	if len(cnts)>0:
+		c = max(cnts, key=cv2.contourArea)
+		x,y,w,h = cv2.boundingRect(c)
+                #cv2.putText(video,'x,y',(int(x),int(y)), cv2.FONT_HERSHEY_SIMPLEX, 0.6,(0,0,255),2)
+                #cv2.putText(video,'w,h',(int(x+w),int(y+h)), cv2.FONT_HERSHEY_SIMPLEX, 0.6,(0,0,255),2)
+                cv2.rectangle(video,(x,y),(x+w,y+h),(0,255,0),2)
+		posisi_x=x+(w/2)
+		posisi_y=y+(h/2)
+		luas=w+h
+		#print '(%d,%d) dan panjang=%d dan lebar= %d ,luas=%d'%(posisi_x,posisi_y,w,h,luas),
+		if posisi_y>200:
+			posisi_y=0
+		goal=np.array([int(posisi_x),int(posisi_y)])
+                #cv.circle(video, (int(posisi_x), int(posisi_y)), 1, (150,0,255), 20)
+		#print ' '
+	else:
+		goal=np.array([0,0])
+	return goal
+def go_gawang():
+	giring_ON()
+	cmps=compas()
+   	position=image_gawang()
+	jarak=int(position[0])
+	tinggi=int(position[1])
+	print 'compas=%d ,jarak=%d dan tinggi=%d'%(cmps,jarak,tinggi)
+	#if cmps>(index+60):
+	#	motor_ka(0,0,0)
+	#	motor_ki(0,0,0)
+	#	motor_be(0,1,80)
+	#elif cmps<(index-60):
+	#	motor_ka(0,0,0)
+	#	motor_ki(0,0,0)
+	#	motor_be(1,0,80)
+	if jarak==0:
+		stop()
+	elif jarak>180:
+		motor_be(0,1,50)
+	elif jarak<140:
+		motor_be(1,0,50)
+	else:
+		shoot()
+		motor_be(0,0,0)
+		PID=pid(jarak,165)
+		_go_(PID,50)
+		#stop()
+		shoot()
+def _go_(_x_,_y_):
+	#print _x_,
+	fast=_y_
+	pwm_ka=fast+Pid
+	pwm_ki=fast-Pid
+	if (pwm_ka > fast+30):
+		pwm_ka=fast+30
+	elif(pwm_ka < min_speed):
+		pwm_ka=min_speed
+	if (pwm_ki > fast+30):
+                pwm_ki=fast+30
+        elif(pwm_ki < min_speed):
+                pwm_ki=min_speed
+	if pwm_ki >=(fast+25):
+		motor_be(1,0,25)
+	elif pwm_ka >=(fast+25):
+		motor_be(0,1,25)
+	else:
+		motor_be(0,0,0)
+	motor_ka(1,0,pwm_ka)
+	motor_ki(1,0,pwm_ki)
+	print '(%d , %d)'%(int(pwm_ka),int(pwm_ki))
+def scan_gawang():
+	global control
+	cmps=compas()
+	print cmps,
+	if control ==1:
+		if cmps<(index-90):
+			putar_kanan()
+		elif cmps>(index+90):
+			putar_kiri()
+		else:
+			go_gawang()
+	elif cmps<(index-10):
+		#print 'ka'
+		motor_ki(0,0,0)
+		motor_ka(0,0,0)
+		motor_be(1,0,80)
+	elif cmps>(index+10):
+		#print 'ki'
+		motor_ki(0,0,0)
+		motor_ka(0,0,0)
+		motor_be(0,1,80)
+	else:
+		
+		motor_be(0,0,0)
+		#go_gawang()
+		control=1	
+def main():
+	global control
+	global Pid
+	cmps=compas()
+	_simpan_=_tracking_()
+	n_x=_simpan_[0]
+	n_y=_simpan_[1]
+	n_z=_simpan_[2]
+	#print'kordinat(%d, %d) diameter %d dan kompas %d dan control=%d'%(n_x,n_y,n_z,compas(),control)
+	if n_z==0:
+		control=0
+		scanning()
+		giring_OFF()		
+	elif n_y>=235 :
+		scan_gawang()
+		giring_ON()
+	elif n_z>0:
+		control=0
+		Pid=pid(n_x,150)
+		print 'Pid=%d'%(Pid)
+		if n_y>=180:
+			_go_(Pid,40)
+		elif n_y<185:
+			_go_(Pid,70)
+		else:
+			stop()
+		giring_OFF()
+
+def main2():
+	global kondisi, con_scan
+	global Pid
+	global robot
+	Re=data[0]
+	R1=data[1]
+	R2=data[2]
+	_simpan_=__tracking__()
+	n_x=_simpan_[0]
+	n_y=_simpan_[1]
+	n_z=_simpan_[2]
+	print'kordinat(%d, %d) diameter %d nilai Pid=%d dan kompas %d'%(n_x,n_y,n_z,Pid,compas())
+	data_sensor=GPIO.input(13)
+	print data_sensor
+	if data_sensor==1:
+		slid_kanan()
+	elif data_sensor==0:
+		if R2 == 'a':
+			scanning()
+		elif R2 == 'a' and n_z>30:
+			cari_gawang()
+		elif n_z>0:
+			con_scan=0
+			giring(0,0,0)
+			Pid=pid(n_x,set_point)
+			_go_(Pid)	
+	if n_z>30:
+		robot.send('A')
+	else:
+		robot.send('a')
+
+#jaringan ROBOT2
+def receive():
+	#global data
+        global robot
+        while 1:
+                buff = robot.recv(1)
+		print buff
+
+def shoot():
+	GPIO.output(26,1)
+	sleep(0.1)
+	GPIO.output(26,0)
+	sleep(0.1)
+def kick_off():
+	motor_ka(1,0,40)
+	motor_be(1,0,40)
+	motor_ki(0,0,0)
+	sleep(4)
+
+Thread(target=receive).start()
+#kick_off()
+
+#while True:
+#	receive()
+#	main()
+	#print compas()
+	#scanning()

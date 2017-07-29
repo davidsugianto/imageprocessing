@@ -1,0 +1,7 @@
+import RPi.GPIO as IO
+from time import sleep
+IO.setwarnings(False)
+IO.sermode(IO.BCM)
+IO.setup(19,IO.OUT)
+pwm = IO.PWM(19,50)
+

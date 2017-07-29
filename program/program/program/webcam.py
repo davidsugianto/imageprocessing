@@ -1,0 +1,31 @@
+import RPi.GPIO as GPIO
+from time import sleep
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+GPIO.setup(2,GPIO.OUT)
+GPIO.setup(3,GPIO.OUT)
+GPIO.setup(4,GPIO.OUT)
+GPIO.setup(14,GPIO.OUT)
+GPIO.setup(15,GPIO.OUT)
+GPIO.setup(18,GPIO.OUT)
+GPIO.setup(17,GPIO.OUT)
+GPIO.setup(27,GPIO.OUT)
+GPIO.setup(22,GPIO.OUT)
+pwm = GPIO.PWM(17,255)
+#pwm1 = GPIO.PWM(15,255)
+#pwm2 = GPIO.PWM(17,255)
+pwm.start(0)
+#pwm1.start(0)
+#pwm2.start(0)
+while True:
+	GPIO.output(14,0)
+	GPIO.output(15,1)
+	#GPIO.output(14,1)
+	#GPIO.output(18,0)
+	#GPIO.output(27,0)
+	for i in range (0,100,2):
+		print i
+		pwm.ChangeDutyCycle(i)
+		#pwm1.ChangeDutyCycle(i)
+		#pwm2.ChangeDutyCycle(i)
+		sleep(0.1)

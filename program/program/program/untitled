@@ -1,0 +1,7 @@
+import time
+
+while True:
+	print "lana"
+	time.sleep(1)
+	print "fiki"
+	time.sleep(1)
